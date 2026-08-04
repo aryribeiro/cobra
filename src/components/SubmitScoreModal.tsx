@@ -40,7 +40,9 @@ export default function SubmitScoreModal({ score, onSubmit, onClose }: SubmitSco
             NOVO RECORDE TOP 10!
           </h2>
           <p className="text-zinc-400 text-xs font-mono mt-1">
-            Sua pontuação de <span className="text-cyan-400 font-bold text-sm">{score} pts</span> entrou para o Ranking!
+            Sua pontuação de <span className="text-cyan-400 font-bold text-sm">
+              {typeof score === 'number' && Number.isFinite(score) ? Math.floor(score).toLocaleString('pt-BR') : 0} pts
+            </span> entrou para o Ranking!
           </p>
         </div>
 

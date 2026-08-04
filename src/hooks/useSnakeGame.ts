@@ -86,7 +86,14 @@ export function useSnakeGame() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedHigh = localStorage.getItem('vercel_snake_highscore');
-      if (savedHigh) setHighScore(parseInt(savedHigh, 10));
+      if (savedHigh) {
+        const parsed = parseInt(savedHigh, 10);
+        if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 500000) {
+          setHighScore(parsed);
+        } else {
+          localStorage.removeItem('vercel_snake_highscore');
+        }
+      }
       setIsMuted(soundManager.getMuted());
     }
   }, []);

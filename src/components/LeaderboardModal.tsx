@@ -84,8 +84,10 @@ export default function LeaderboardModal({ entries, isTurso, onClose }: Leaderbo
                     </div>
 
                     {/* PONTUAÇÃO */}
-                    <div className="col-span-4 text-right font-extrabold text-cyan-400 text-sm">
-                      {item.score.toLocaleString()} pts
+                    <div className="col-span-4 text-right font-extrabold text-cyan-400 text-sm truncate">
+                      {typeof item.score === 'number' && Number.isFinite(item.score)
+                        ? Math.floor(item.score).toLocaleString('pt-BR')
+                        : '0'} pts
                     </div>
                   </div>
                 );

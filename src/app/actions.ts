@@ -1,6 +1,14 @@
 'use server';
 
-import { getTopLeaderboard, saveScoreToTurso, isTursoConfigured, LeaderboardEntry } from '../lib/turso';
+import {
+  getTopLeaderboard,
+  saveScoreToTurso,
+  isTursoConfigured,
+  LeaderboardEntry,
+  validateScore,
+  sanitizeName,
+  sanitizeEmoji,
+} from '../lib/turso';
 
 export async function fetchLeaderboardAction(): Promise<{ isTurso: boolean; data: LeaderboardEntry[] }> {
   if (!isTursoConfigured) {
@@ -18,6 +26,19 @@ export async function submitScoreAction(
   if (!isTursoConfigured) {
     return { isTurso: false, data: [] };
   }
-  const data = await saveScoreToTurso({ name, emoji, score });
+
+  // DevSecOps: Validação de segurança no Server Action
+  const validScore = validateScore(score);
+  if (validScore === null) {
+    console.warn(`[DevSecOps] Server Action rejeitou score inválido: ${score}`);
+    const data = await getTopLeaderboard();
+    return { isTurso: true, data };
+  }
+
+  const cleanName = sanitizeName(name);
+  const cleanEmoji = sanitizeEmoji(emoji);
+
+  const data = await saveScoreToTurso({ name: cleanName, emoji: cleanEmoji, score: validScore });
   return { isTurso: true, data };
 }
+
