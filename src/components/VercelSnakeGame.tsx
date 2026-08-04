@@ -165,8 +165,16 @@ export default function VercelSnakeGame() {
           ))}
         </div>
 
-        {/* BOTÃO ÁUDIO E PAUSA */}
+        {/* BOTÃO RANKING, ÁUDIO E PAUSA */}
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowLeaderboard(true)}
+            className="px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs font-mono transition-colors flex items-center space-x-1"
+            title="Ver Ranking Top 10"
+          >
+            <span>🏆</span>
+            <span>RANKING</span>
+          </button>
           <button
             onClick={toggleSound}
             className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-cyan-400 transition-colors text-sm"
@@ -262,18 +270,12 @@ export default function VercelSnakeGame() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center justify-center">
               <button
                 onClick={() => startGame()}
                 className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 text-white font-bold text-sm uppercase tracking-wider hover:opacity-95 shadow-glow transition-all transform hover:scale-105"
               >
                 INICIAR JOGO ▶
-              </button>
-              <button
-                onClick={() => setShowLeaderboard(true)}
-                className="px-5 py-3 rounded-xl bg-zinc-900 border border-amber-500/60 hover:border-amber-400 text-amber-300 font-bold text-sm uppercase tracking-wider transition-all"
-              >
-                🏆 RANKING
               </button>
             </div>
           </div>
