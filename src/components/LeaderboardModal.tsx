@@ -25,18 +25,6 @@ export default function LeaderboardModal({ entries, isTurso, onClose }: Leaderbo
           <h2 className="text-2xl font-extrabold tracking-widest bg-gradient-to-r from-amber-300 via-cyan-400 to-purple-400 bg-clip-text text-transparent uppercase">
             RANKING TOP 10 GLOBAL
           </h2>
-          <p className="text-zinc-400 text-xs font-mono mt-1 flex items-center justify-center space-x-1">
-            <span>Servidor:</span>
-            {isTurso ? (
-              <span className="text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-700/50">
-                ⚡ Turso Cloud SQLite
-              </span>
-            ) : (
-              <span className="text-amber-400 font-bold bg-amber-950/80 px-2 py-0.5 rounded border border-amber-700/50">
-                💾 Armazenamento Local
-              </span>
-            )}
-          </p>
         </div>
 
         {/* TABELA TOP 10 */}
