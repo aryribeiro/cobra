@@ -105,30 +105,44 @@ export default function VercelSnakeGame() {
     }
   };
 
-  // Suporte a Touch Swipe no Canvas para mobile
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Swipe detectado DURANTE o movimento do dedo (touchmove), não no soltar —
+  // o comando dispara assim que o gesto cruza o limiar, e a âncora re-arma
+  // para permitir vários comandos num único arrasto contínuo.
+  const touchAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  const SWIPE_THRESHOLD = 24;
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    touchAnchorRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - touchStartRef.current.x;
-    const dy = touch.clientY - touchStartRef.current.y;
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const anchor = touchAnchorRef.current;
+    if (!anchor) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - anchor.x;
+    const dy = touch.clientY - anchor.y;
+    if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
 
     if (Math.abs(dx) > Math.abs(dy)) {
-      if (Math.abs(dx) > 30) {
-        changeDirection(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
-      }
+      changeDirection(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
     } else {
-      if (Math.abs(dy) > 30) {
-        changeDirection(dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 });
-      }
+      changeDirection(dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 });
     }
-    touchStartRef.current = null;
+    touchAnchorRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = () => {
+    touchAnchorRef.current = null;
+  };
+
+  // D-pad: dispara no pointerdown (dedo ENCOSTA), não no click (dedo solta)
+  const handleDpadPress = (dir: { x: number; y: number }) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    changeDirection(dir);
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try { navigator.vibrate(10); } catch { /* sem suporte */ }
+    }
   };
 
   return (
@@ -172,7 +186,7 @@ export default function VercelSnakeGame() {
             {/* BOTÃO RANKING, ÁUDIO E PAUSA */}
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => setShowLeaderboard(true)}
+                onClick={(e) => { e.currentTarget.blur(); setShowLeaderboard(true); }}
                 className="px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-500/50 hover:border-amber-400 text-amber-300 font-bold text-xs font-mono transition-colors flex items-center space-x-1"
                 title="Ver Ranking Top 10"
               >
@@ -180,7 +194,7 @@ export default function VercelSnakeGame() {
                 <span>RANKING</span>
               </button>
               <button
-                onClick={toggleSound}
+                onClick={(e) => { e.currentTarget.blur(); toggleSound(); }}
                 className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-cyan-400 transition-colors text-sm"
                 title={isMuted ? 'Desmutar Som' : 'Mutar Som'}
               >
@@ -188,7 +202,7 @@ export default function VercelSnakeGame() {
               </button>
               {status === 'playing' && (
                 <button
-                  onClick={pauseGame}
+                  onClick={(e) => { e.currentTarget.blur(); pauseGame(); }}
                   className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-xs font-semibold"
                 >
                   PAUSAR
@@ -202,19 +216,19 @@ export default function VercelSnakeGame() {
         <div className="w-full mb-1.5 sm:mb-2 grid grid-cols-4 gap-2 text-center text-xs font-mono">
           <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">PONTOS</div>
-            <div className="text-cyan-400 font-bold text-sm sm:text-base">{score}</div>
+            <div key={score} className="text-cyan-400 font-bold text-sm sm:text-base animate-stat-pop">{score}</div>
           </div>
           <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">RECORDE</div>
-            <div className="text-amber-400 font-bold text-sm sm:text-base">{highScore}</div>
+            <div key={highScore} className="text-amber-400 font-bold text-sm sm:text-base animate-stat-pop">{highScore}</div>
           </div>
           <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">NÍVEL</div>
-            <div className="text-purple-400 font-bold text-sm sm:text-base">{level}</div>
+            <div key={level} className="text-purple-400 font-bold text-sm sm:text-base animate-stat-pop">{level}</div>
           </div>
-          <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
+          <div className={`bg-zinc-950/60 border rounded-lg p-1.5 sm:p-2 transition-colors ${combo >= 4 ? 'border-pink-500/70' : 'border-zinc-800/80'}`}>
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">COMBO</div>
-            <div className="text-pink-400 font-bold text-sm sm:text-base">{combo}x</div>
+            <div key={combo} className="text-pink-400 font-bold text-sm sm:text-base animate-stat-pop">{combo}x</div>
           </div>
         </div>
 
@@ -228,12 +242,13 @@ export default function VercelSnakeGame() {
         )}
 
         {/* CONTAINER DO CANVAS COM OVERLAYS */}
-        <div className="relative w-full aspect-[4/3] bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+        <div className={`relative w-full aspect-[4/3] bg-zinc-950 border rounded-xl overflow-hidden shadow-2xl transition-all duration-300 ${activeItemEffect ? 'border-cyan-500/70 shadow-glow' : 'border-zinc-800'}`}>
           <canvas
             ref={canvasRef}
             width={800}
             height={600}
             onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             className="w-full h-full object-contain cursor-crosshair touch-none"
           />
@@ -366,27 +381,27 @@ export default function VercelSnakeGame() {
           <div className="grid grid-cols-3 gap-1 w-36">
             <div />
             <button
-              onClick={() => changeDirection({ x: 0, y: -1 })}
-              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black border border-zinc-700 text-base font-bold flex items-center justify-center shadow"
+              onPointerDown={handleDpadPress({ x: 0, y: -1 })}
+              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black active:scale-95 border border-zinc-700 text-base font-bold flex items-center justify-center shadow touch-none select-none transition-transform"
             >
               ▲
             </button>
             <div />
             <button
-              onClick={() => changeDirection({ x: -1, y: 0 })}
-              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black border border-zinc-700 text-base font-bold flex items-center justify-center shadow"
+              onPointerDown={handleDpadPress({ x: -1, y: 0 })}
+              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black active:scale-95 border border-zinc-700 text-base font-bold flex items-center justify-center shadow touch-none select-none transition-transform"
             >
               ◀
             </button>
             <button
-              onClick={() => changeDirection({ x: 0, y: 1 })}
-              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black border border-zinc-700 text-base font-bold flex items-center justify-center shadow"
+              onPointerDown={handleDpadPress({ x: 0, y: 1 })}
+              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black active:scale-95 border border-zinc-700 text-base font-bold flex items-center justify-center shadow touch-none select-none transition-transform"
             >
               ▼
             </button>
             <button
-              onClick={() => changeDirection({ x: 1, y: 0 })}
-              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black border border-zinc-700 text-base font-bold flex items-center justify-center shadow"
+              onPointerDown={handleDpadPress({ x: 1, y: 0 })}
+              className="h-9 rounded-lg bg-zinc-900 active:bg-cyan-500 active:text-black active:scale-95 border border-zinc-700 text-base font-bold flex items-center justify-center shadow touch-none select-none transition-transform"
             >
               ▶
             </button>

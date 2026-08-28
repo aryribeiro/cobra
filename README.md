@@ -14,10 +14,20 @@ Web game arcade inspirado no clássico jogo da cobrinha (Nokia), reimaginado com
   - Sistema de **Desempate Inteligente**: em empates de pontuação, o jogador mais recente assume automaticamente a posição mais alta no pódio.
   - **Fallback Gracioso**: se as chaves do Turso não estiverem presentes, o jogo utiliza `localStorage` sem interromper a partida.
 - **⚡ Renderização HTML5 Canvas (60 FPS)**: Resolução nativa de 800x600 px escalada responsivamente mantendo a proporção de aspecto.
+- **⚡ Input Imediato (v0.2.0)**:
+  - D-Pad mobile dispara no **toque** (`pointerdown`), não no soltar do dedo.
+  - Swipe detectado **durante o gesto** (`touchmove`) com re-arme — vários comandos num único arrasto.
+  - Timestep fixo com acumulador: o relógio do jogo nunca engasga (nem ao comer itens, nem ao voltar de outra aba).
+  - Fila de direções curta (2) onde o comando mais novo sempre vence — sem curvas "fantasma".
+  - Regra clássica de cauda: mover para a célula que a cauda desocupa no mesmo tick não é colisão.
 - **✨ Game Juice & Sensação de Jogo**:
+  - **Movimento interpolado a 60 FPS**: a cobra desliza suavemente entre as células em vez de teleportar.
   - Tremores de tela (*Screen Shake*) em colisões com a borda e itens lendários.
+  - Flashes de tela (dano, level up, item lendário), anéis de choque e pulso da cabeça ao comer.
+  - Olhos da cobrinha acompanham a direção do movimento; itens flutuam com halo pulsante e pop de spawn.
+  - Vibração háptica no mobile (comer, dano, game over).
   - Efeitos sonoros sintetizados em tempo real via **Web Audio API** (munch, powerup, colisão, level up, game over).
-  - Partículas visuais e popups de texto flutuantes ("+500", "TURBO!", "SHIELD UP!").
+  - Partículas visuais, rastro de faíscas no turbo e popups de texto flutuantes ("+500", "COMBO x4!", "SHIELD BOUNCE!").
 - **🍎 40+ Emojis & Power-ups**:
   - 25 comidas comuns (🍎, 🍌, 🍕, 🍔, 🍓, 🥑, 🥩...).
   - 17 power-ups especiais: 🚀 Turbo Speed, 🐢 Slow Motion, 🛡️ Escudo de Borda, 🔮 Esfera Encolhedora, 💖 Vida Extra, 🌟 Estrela Invencível, 💎 Diamantes.
