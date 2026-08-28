@@ -9,9 +9,8 @@ export interface LeaderboardEntry {
   created_at?: string;
 }
 
-// Aceita nomes de variável neutros, com fallback para os legados já configurados
-const url = process.env.DB_URL || process.env.TURSO_DATABASE_URL || '';
-const authToken = process.env.DB_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN || '';
+const url = process.env.DB_URL || '';
+const authToken = process.env.DB_AUTH_TOKEN || '';
 
 export const isDbConfigured = Boolean(url && authToken);
 

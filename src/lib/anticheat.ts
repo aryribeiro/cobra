@@ -1,11 +1,12 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
-// Segredo de assinatura: SCORE_SECRET dedicado ou derivado do token do banco
-// (server-only; nunca chega ao client). Trocar SCORE_SECRET invalida tokens em voo.
+// Segredo de assinatura (server-only; nunca chega ao client).
+// Em produção usa SCORE_SECRET dedicado; sem ele, deriva de DB_AUTH_TOKEN
+// para o ambiente local. Trocar SCORE_SECRET invalida tokens em voo.
 const secret =
   process.env.SCORE_SECRET ||
   createHash('sha256')
-    .update('vercel-snake-hmac-v1:' + (process.env.DB_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN || 'dev-secret'))
+    .update('snake-hmac-v1:' + (process.env.DB_AUTH_TOKEN || 'dev-secret'))
     .digest('hex');
 
 const TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
