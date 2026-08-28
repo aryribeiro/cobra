@@ -1,6 +1,6 @@
 # 🐍 Vercel Snake • Next-Gen Arcade Game
 
-Web game arcade inspirado no clássico jogo da cobrinha (Nokia), reimaginado com a identidade visual da **Vercel** (dark mode obsidian, neon cyan/purple gradients e glassmorphism), renderização via HTML5 Canvas (60 FPS), 40+ emojis de itens com efeitos especiais, áudio sintetizado em tempo real via Web Audio API, **Ranking Top 10 Global na nuvem** e suporte completo para PC, Tablet e Smartphone.
+Web game arcade inspirado no clássico jogo da cobrinha (Nokia), reimaginado com a identidade visual da **Vercel** (dark mode obsidian, neon cyan/purple gradients e glassmorphism), renderização via HTML5 Canvas (60 FPS), 40+ emojis de itens com efeitos especiais, efeitos sonoros em arquivos locais (sem dependência externa), **Ranking Top 10 Global na nuvem** e suporte completo para PC, Tablet e Smartphone.
 
 🌐 **URL Oficial do Projeto**: [https://snake2026.vercel.app](https://snake2026.vercel.app)
 
@@ -27,7 +27,7 @@ Web game arcade inspirado no clássico jogo da cobrinha (Nokia), reimaginado com
   - Flashes de tela (dano, level up, item lendário), anéis de choque e pulso da cabeça ao comer.
   - Olhos da cobrinha acompanham a direção do movimento; itens flutuam com halo pulsante e pop de spawn.
   - Vibração háptica no mobile (comer, dano, game over).
-  - Efeitos sonoros sintetizados em tempo real via **Web Audio API** (munch, powerup, colisão, level up, game over).
+  - Efeitos sonoros em **arquivos WAV locais** (`public/sounds/`), decodificados uma vez e tocados com baixa latência — sem dependência de serviços de áudio externos.
   - Partículas visuais, rastro de faíscas no turbo e popups de texto flutuantes ("+500", "COMBO x4!", "SHIELD BOUNCE!").
 - **🍎 40+ Emojis & Power-ups**:
   - 25 comidas comuns (🍎, 🍌, 🍕, 🍔, 🍓, 🥑, 🥩...).

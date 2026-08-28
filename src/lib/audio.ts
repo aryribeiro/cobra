@@ -1,8 +1,22 @@
-// Web Audio API Synthesizer - Zero external audio files required
+// Reprodução de SFX a partir de arquivos WAV locais (public/sounds/*).
+// Sem dependência de terceiros: os áudios ficam no repositório e são
+// decodificados uma vez para AudioBuffers (baixa latência, permitem overlap).
+
+type SfxName = 'eat' | 'powerup' | 'hit' | 'levelup' | 'gameover';
+
+const SFX_FILES: Record<SfxName, string> = {
+  eat: '/sounds/eat.wav',
+  powerup: '/sounds/powerup.wav',
+  hit: '/sounds/hit.wav',
+  levelup: '/sounds/levelup.wav',
+  gameover: '/sounds/gameover.wav',
+};
 
 class SoundManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
+  private buffers: Partial<Record<SfxName, AudioBuffer>> = {};
+  private loadStarted = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -14,20 +28,50 @@ class SoundManager {
   private initCtx() {
     if (!this.ctx && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
+      if (AudioCtx) this.ctx = new AudioCtx();
     }
-    // resume() só quando realmente suspenso (evita custo por som tocado)
     if (this.ctx && this.ctx.state === 'suspended') {
       void this.ctx.resume();
     }
   }
 
-  // Pré-aquece o AudioContext num gesto do usuário (clique de iniciar),
-  // pagando o custo de criação ANTES do jogo — o primeiro item não trava.
+  // Carrega e decodifica todos os SFX uma única vez.
+  private loadAll() {
+    if (this.loadStarted || !this.ctx) return;
+    this.loadStarted = true;
+    (Object.keys(SFX_FILES) as SfxName[]).forEach(async (name) => {
+      try {
+        const res = await fetch(SFX_FILES[name]);
+        const arr = await res.arrayBuffer();
+        const buf = await this.ctx!.decodeAudioData(arr);
+        this.buffers[name] = buf;
+      } catch {
+        /* arquivo indisponível — som apenas não toca */
+      }
+    });
+  }
+
+  // Pré-aquece no gesto do usuário (clique de iniciar): cria o contexto e
+  // dispara o carregamento, pagando o custo ANTES do jogo começar.
   public warmUp() {
     this.initCtx();
+    this.loadAll();
+  }
+
+  private play(name: SfxName, volume = 1) {
+    if (this.isMuted) return;
+    this.initCtx();
+    this.loadAll();
+    if (!this.ctx) return;
+    const buffer = this.buffers[name];
+    if (!buffer) return; // ainda decodificando: ignora em vez de travar
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+    src.connect(gain);
+    gain.connect(this.ctx.destination);
+    src.start();
   }
 
   public toggleMute(): boolean {
@@ -42,134 +86,11 @@ class SoundManager {
     return this.isMuted;
   }
 
-  public playEat() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sine';
-    const now = this.ctx.currentTime;
-
-    osc.frequency.setValueAtTime(300, now);
-    osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
-
-    gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.08);
-  }
-
-  public playPowerup() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-    const notes = [400, 520, 660, 880];
-
-    notes.forEach((freq, i) => {
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now + i * 0.05);
-
-      gain.gain.setValueAtTime(0.25, now + i * 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + (i + 1) * 0.05);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start(now + i * 0.05);
-      osc.stop(now + (i + 1) * 0.05);
-    });
-  }
-
-  public playHit() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, now);
-    osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
-
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.2);
-  }
-
-  public playLevelUp() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-    const freqs = [523.25, 659.25, 783.99, 1046.5];
-
-    freqs.forEach((freq, i) => {
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + i * 0.08);
-
-      gain.gain.setValueAtTime(0.3, now + i * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.12);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start(now + i * 0.08);
-      osc.stop(now + i * 0.08 + 0.12);
-    });
-  }
-
-  public playGameOver() {
-    if (this.isMuted) return;
-    this.initCtx();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-    const notes = [300, 260, 220, 150];
-
-    notes.forEach((freq, i) => {
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, now + i * 0.15);
-
-      gain.gain.setValueAtTime(0.3, now + i * 0.15);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + (i + 1) * 0.15);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start(now + i * 0.15);
-      osc.stop(now + (i + 1) * 0.15);
-    });
-  }
+  public playEat() { this.play('eat'); }
+  public playPowerup() { this.play('powerup'); }
+  public playHit() { this.play('hit'); }
+  public playLevelUp() { this.play('levelup'); }
+  public playGameOver() { this.play('gameover'); }
 }
 
 export const soundManager = new SoundManager();
