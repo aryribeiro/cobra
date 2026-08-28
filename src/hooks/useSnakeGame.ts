@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { soundManager } from '../lib/audio';
-import { SnakeItem, getRandomItem } from '../lib/items';
+import { SnakeItem, getRandomItem, GAME_ITEMS } from '../lib/items';
 
 export type GameStatus = 'menu' | 'playing' | 'paused' | 'gameover';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'insane';
@@ -136,6 +136,10 @@ export function useSnakeGame() {
   const headPulseRef = useRef<number>(1);
   const itemSpawnAtRef = useRef<number>(0);
 
+  // Sprites pré-renderizados (offscreen) — evitam fillText de emoji e ~70 strokes por frame
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const itemSpritesRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+
   const updateStatus = useCallback((s: GameStatus) => {
     statusRef.current = s;
     setStatus(s);
@@ -213,6 +217,8 @@ export function useSnakeGame() {
   };
 
   const startGame = useCallback((selectedDifficulty?: Difficulty) => {
+    // Aquece o áudio no gesto do clique (evita hitch no primeiro som/item)
+    soundManager.warmUp();
     const diff = selectedDifficulty || difficultyRef.current;
     difficultyRef.current = diff;
     setDifficulty(diff);
@@ -285,6 +291,63 @@ export function useSnakeGame() {
 
     let animationFrameId: number;
     let lastFrameTime = performance.now();
+
+    // Fundo (grid neon) renderizado UMA vez para um canvas offscreen; nunca muda.
+    const buildBackground = () => {
+      const bg = document.createElement('canvas');
+      bg.width = CANVAS_WIDTH;
+      bg.height = CANVAS_HEIGHT;
+      const bctx = bg.getContext('2d');
+      if (!bctx) return null;
+      bctx.fillStyle = '#050505';
+      bctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      bctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      bctx.lineWidth = 1;
+      bctx.beginPath();
+      for (let x = 0; x <= CANVAS_WIDTH; x += CELL_SIZE) {
+        bctx.moveTo(x, 0);
+        bctx.lineTo(x, CANVAS_HEIGHT);
+      }
+      for (let y = 0; y <= CANVAS_HEIGHT; y += CELL_SIZE) {
+        bctx.moveTo(0, y);
+        bctx.lineTo(CANVAS_WIDTH, y);
+      }
+      bctx.stroke();
+      return bg;
+    };
+    bgCanvasRef.current = buildBackground();
+
+    // Sprites de item (halo + emoji): construídos UMA vez para todos os itens.
+    // Comer nunca mais paga fillText de emoji nem alocação de canvas.
+    const SPRITE = 48;
+    const buildItemSprite = (emoji: string, legendary: boolean): HTMLCanvasElement => {
+      const c = document.createElement('canvas');
+      c.width = SPRITE;
+      c.height = SPRITE;
+      const g = c.getContext('2d');
+      if (g) {
+        const cx = SPRITE / 2;
+        const grad = g.createRadialGradient(cx, cx, 2, cx, cx, cx);
+        grad.addColorStop(0, legendary ? 'rgba(255, 0, 128, 0.45)' : 'rgba(0, 240, 255, 0.32)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        g.fillStyle = grad;
+        g.beginPath();
+        g.arc(cx, cx, cx, 0, Math.PI * 2);
+        g.fill();
+        g.font = '22px sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(emoji, cx, cx);
+      }
+      return c;
+    };
+    if (itemSpritesRef.current.size === 0) {
+      for (const it of GAME_ITEMS) {
+        if (!itemSpritesRef.current.has(it.emoji)) {
+          itemSpritesRef.current.set(it.emoji, buildItemSprite(it.emoji, it.rarity === 'legendary'));
+        }
+      }
+    }
 
     const tickOnce = (interval: number) => {
       // Processar fila de direção
@@ -490,23 +553,12 @@ export function useSnakeGame() {
         shakeRef.current = Math.max(0, shakeRef.current - 1);
       }
 
-      // Fundo Dark Vercel com Grid Neon sutil
-      ctx.fillStyle = '#050505';
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-      ctx.lineWidth = 1;
-      for (let x = 0; x <= CANVAS_WIDTH; x += CELL_SIZE) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, CANVAS_HEIGHT);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= CANVAS_HEIGHT; y += CELL_SIZE) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(CANVAS_WIDTH, y);
-        ctx.stroke();
+      // Fundo Dark Vercel com Grid Neon (cacheado — 1 drawImage no lugar de ~70 strokes)
+      if (bgCanvasRef.current) {
+        ctx.drawImage(bgCanvasRef.current, 0, 0);
+      } else {
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
       // Borda Externa Neon
@@ -514,30 +566,23 @@ export function useSnakeGame() {
       ctx.lineWidth = 4;
       ctx.strokeRect(2, 2, CANVAS_WIDTH - 4, CANVAS_HEIGHT - 4);
 
-      // Item (Emoji com halo pulsante, pop de spawn e flutuação)
+      // Item: sprite pré-renderizado (halo+emoji) desenhado com escala — sem fillText por frame
       if (currentItemRef.current) {
         const { item, pos } = currentItemRef.current;
-        // Pop-in elástico nos primeiros ~250ms após o spawn (ease-out com leve overshoot)
-        const age = time - itemSpawnAtRef.current;
-        const popT = Math.min(1, age / 250);
-        const spawnScale = popT < 1 ? popT * (2 - popT) * (1 + 0.3 * (1 - popT)) : 1;
-        const bob = Math.sin(time * 0.005) * 2;
-        const ix = pos.x * CELL_SIZE + CELL_SIZE / 2;
-        const iy = pos.y * CELL_SIZE + CELL_SIZE / 2 + bob;
-        const haloR = 15 + Math.sin(time * 0.008) * 4;
-
-        const gradient = ctx.createRadialGradient(ix, iy, 2, ix, iy, Math.max(6, haloR + 4));
-        gradient.addColorStop(0, item.rarity === 'legendary' ? 'rgba(255, 0, 128, 0.45)' : 'rgba(0, 240, 255, 0.32)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(ix, iy, Math.max(6, haloR + 4), 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.font = `${Math.max(4, 16 * spawnScale)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(item.emoji, ix, iy);
+        const sprite = itemSpritesRef.current.get(item.emoji);
+        if (sprite) {
+          // Pop-in elástico (~250ms) + pulso/flutuação via escala e posição (baratos)
+          const age = time - itemSpawnAtRef.current;
+          const popT = Math.min(1, age / 250);
+          const spawnScale = popT < 1 ? popT * (2 - popT) * (1 + 0.3 * (1 - popT)) : 1;
+          const pulse = 1 + Math.sin(time * 0.008) * 0.08;
+          const scale = spawnScale * pulse;
+          const bob = Math.sin(time * 0.005) * 2;
+          const cx = pos.x * CELL_SIZE + CELL_SIZE / 2;
+          const cy = pos.y * CELL_SIZE + CELL_SIZE / 2 + bob;
+          const size = SPRITE * scale;
+          ctx.drawImage(sprite, cx - size / 2, cy - size / 2, size, size);
+        }
       }
 
       // Cobra com interpolação entre células (snap em teleporte/encolhimento)
@@ -565,7 +610,8 @@ export function useSnakeGame() {
         if (isHead) {
           ctx.fillStyle = invincibleMsRef.current > 0 ? '#FF0080' : shieldMsRef.current > 0 ? '#00F0FF' : '#FFFFFF';
           ctx.shadowColor = ctx.fillStyle;
-          ctx.shadowBlur = 10 + (headPulseRef.current - 1) * 30;
+          // Glow fixo e baixo: o pulso ao comer já aparece pelo tamanho (grow), sem custo de blur
+          ctx.shadowBlur = 8;
         } else {
           const alpha = Math.max(0.2, 1 - idx / (snake.length * 1.2));
           ctx.fillStyle = invincibleMsRef.current > 0 ? `rgba(255, 0, 128, ${alpha})` : `rgba(0, 240, 255, ${alpha})`;
@@ -637,9 +683,10 @@ export function useSnakeGame() {
           ctx.save();
           ctx.globalAlpha = ft.alpha;
           ctx.font = `bold ${Math.round(14 * ft.scale)}px sans-serif`;
+          // Contorno escuro barato (1 fill extra) no lugar de shadowBlur por texto por frame
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillText(ft.text, ft.x + 1, ft.y + 1);
           ctx.fillStyle = ft.color;
-          ctx.shadowColor = ft.color;
-          ctx.shadowBlur = 6;
           ctx.fillText(ft.text, ft.x, ft.y);
           ctx.restore();
           aliveTexts.push(ft);

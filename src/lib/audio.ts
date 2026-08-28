@@ -18,9 +18,16 @@ class SoundManager {
         this.ctx = new AudioCtx();
       }
     }
+    // resume() só quando realmente suspenso (evita custo por som tocado)
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      void this.ctx.resume();
     }
+  }
+
+  // Pré-aquece o AudioContext num gesto do usuário (clique de iniciar),
+  // pagando o custo de criação ANTES do jogo — o primeiro item não trava.
+  public warmUp() {
+    this.initCtx();
   }
 
   public toggleMute(): boolean {

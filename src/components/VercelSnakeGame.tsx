@@ -233,19 +233,19 @@ export default function VercelSnakeGame() {
         <div className="w-full mb-1.5 sm:mb-2 grid grid-cols-4 gap-2 text-center text-xs font-mono">
           <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">PONTOS</div>
-            <div key={score} className="text-cyan-400 font-bold text-sm sm:text-base animate-stat-pop">{score}</div>
+            <div className="text-cyan-400 font-bold text-sm sm:text-base">{score}</div>
           </div>
           <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">RECORDE</div>
-            <div key={highScore} className="text-amber-400 font-bold text-sm sm:text-base animate-stat-pop">{highScore}</div>
+            <div className="text-amber-400 font-bold text-sm sm:text-base">{highScore}</div>
           </div>
           <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-lg p-1.5 sm:p-2">
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">NÍVEL</div>
-            <div key={level} className="text-purple-400 font-bold text-sm sm:text-base animate-stat-pop">{level}</div>
+            <div className="text-purple-400 font-bold text-sm sm:text-base">{level}</div>
           </div>
           <div className={`bg-zinc-950/60 border rounded-lg p-1.5 sm:p-2 transition-colors ${combo >= 4 ? 'border-pink-500/70' : 'border-zinc-800/80'}`}>
             <div className="text-zinc-500 uppercase text-[10px] sm:text-xs">COMBO</div>
-            <div key={combo} className="text-pink-400 font-bold text-sm sm:text-base animate-stat-pop">{combo}x</div>
+            <div className="text-pink-400 font-bold text-sm sm:text-base">{combo}x</div>
           </div>
         </div>
 
