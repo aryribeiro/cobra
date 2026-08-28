@@ -1,15 +1,14 @@
 'use client';
 
 import React from 'react';
-import { LeaderboardEntry } from '../lib/turso';
+import { LeaderboardEntry } from '../lib/db';
 
 interface LeaderboardModalProps {
   entries: LeaderboardEntry[];
-  isTurso: boolean;
   onClose: () => void;
 }
 
-export default function LeaderboardModal({ entries, isTurso, onClose }: LeaderboardModalProps) {
+export default function LeaderboardModal({ entries, onClose }: LeaderboardModalProps) {
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
       <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative text-white">

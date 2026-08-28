@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSnakeGame, Difficulty } from '../hooks/useSnakeGame';
-import { fetchLeaderboardAction, submitScoreAction } from '../app/actions';
-import { LeaderboardEntry } from '../lib/turso';
+import { fetchLeaderboardAction, submitScoreAction, startGameSessionAction } from '../app/actions';
+import { LeaderboardEntry } from '../lib/db';
 import LeaderboardModal from './LeaderboardModal';
 import SubmitScoreModal from './SubmitScoreModal';
 
@@ -28,20 +28,33 @@ export default function VercelSnakeGame() {
 
   // Estados do Leaderboard
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
-  const [isTurso, setIsTurso] = useState<boolean>(false);
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [hasPromptedSubmit, setHasPromptedSubmit] = useState<boolean>(false);
 
-  // Carregar Ranking inicial (Turso ou localStorage Fallback)
+  // Sessão de jogo assinada (anti-cheat): emitida a cada partida nova
+  const gameTokenRef = useRef<string | null>(null);
+  const prevStatusRef = useRef(status);
+
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status === 'playing' && (prev === 'menu' || prev === 'gameover')) {
+      gameTokenRef.current = null;
+      startGameSessionAction()
+        .then((r) => { gameTokenRef.current = r.token; })
+        .catch(() => { gameTokenRef.current = null; });
+    }
+  }, [status]);
+
+  // Carregar Ranking inicial (nuvem ou localStorage Fallback)
   const loadLeaderboard = useCallback(async () => {
     try {
       const res = await fetchLeaderboardAction();
-      setIsTurso(res.isTurso);
-      if (res.isTurso && res.data.length > 0) {
+      if (res.online && res.data.length > 0) {
         setLeaderboardEntries(res.data);
       } else {
-        // Fallback para localStorage se Turso não estiver configurado
+        // Fallback para localStorage se o banco não estiver configurado
         const localData = localStorage.getItem('vercel_snake_local_top10');
         if (localData) {
           setLeaderboardEntries(JSON.parse(localData));
@@ -72,16 +85,20 @@ export default function VercelSnakeGame() {
     }
   }, [status, score, leaderboardEntries, hasPromptedSubmit]);
 
-  // Submeter Pontuação (Turso ou Local)
+  // Submeter Pontuação (nuvem ou local)
   const handleSubmitScore = async (name: string, emoji: string) => {
     try {
-      const res = await submitScoreAction(name, emoji, score);
-      if (res.isTurso && res.data.length > 0) {
-        setIsTurso(true);
-        setLeaderboardEntries(res.data);
+      const res = await submitScoreAction({
+        name,
+        emoji,
+        score,
+        itemsEaten,
+        token: gameTokenRef.current ?? '',
+      });
+      if (res.online) {
+        if (res.data.length > 0) setLeaderboardEntries(res.data);
       } else {
         // Salvar localmente no fallback
-        setIsTurso(false);
         const newEntry: LeaderboardEntry = {
           id: Date.now(),
           name,
@@ -371,7 +388,6 @@ export default function VercelSnakeGame() {
         {showLeaderboard && (
           <LeaderboardModal
             entries={leaderboardEntries}
-            isTurso={isTurso}
             onClose={() => setShowLeaderboard(false)}
           />
         )}
