@@ -111,8 +111,6 @@ export function useSnakeGame() {
   const itemsEatenRef = useRef<number>(0);
 
   const snakeRef = useRef<Position[]>(INITIAL_SNAKE.map((p) => ({ ...p })));
-  // Posições do tick anterior, para interpolação visual entre células
-  const prevSnakeRef = useRef<Position[]>(INITIAL_SNAKE.map((p) => ({ ...p })));
   const dirRef = useRef<Position>({ x: 1, y: 0 });
   const nextDirQueueRef = useRef<Position[]>([]);
   const currentItemRef = useRef<{ item: SnakeItem; pos: Position } | null>(null);
@@ -140,10 +138,28 @@ export function useSnakeGame() {
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const itemSpritesRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
 
+  // Sincroniza o HUD (React) a partir das refs autoritativas. Chamado por um
+  // timer de baixa frequência — nunca dentro do frame de animação/juice.
+  const flushHud = useCallback(() => {
+    setScore((v) => (v !== scoreRef.current ? scoreRef.current : v));
+    setHighScore((v) => (v !== highScoreRef.current ? highScoreRef.current : v));
+    setLevel((v) => (v !== levelRef.current ? levelRef.current : v));
+    setCombo((v) => (v !== comboRef.current ? comboRef.current : v));
+    setItemsEaten((v) => (v !== itemsEatenRef.current ? itemsEatenRef.current : v));
+  }, []);
+
   const updateStatus = useCallback((s: GameStatus) => {
     statusRef.current = s;
+    if (s === 'gameover') flushHud(); // garante valores finais no overlay/submit
     setStatus(s);
-  }, []);
+  }, [flushHud]);
+
+  // HUD atualiza a ~8Hz enquanto joga, desacoplado do loop de render
+  useEffect(() => {
+    if (status !== 'playing') return;
+    const id = setInterval(flushHud, 120);
+    return () => clearInterval(id);
+  }, [status, flushHud]);
 
   // Carregar High Score e Mute do localStorage
   useEffect(() => {
@@ -224,7 +240,6 @@ export function useSnakeGame() {
     setDifficulty(diff);
 
     snakeRef.current = INITIAL_SNAKE.map((p) => ({ ...p }));
-    prevSnakeRef.current = INITIAL_SNAKE.map((p) => ({ ...p }));
     dirRef.current = { x: 1, y: 0 };
     nextDirQueueRef.current = [];
 
@@ -425,7 +440,6 @@ export function useSnakeGame() {
           const safeY = Math.max(1, Math.min(GRID_ROWS - 2, head.y + dirRef.current.y));
           shrunk[0] = { x: safeX, y: safeY };
           snakeRef.current = shrunk;
-          prevSnakeRef.current = shrunk.map((p) => ({ ...p }));
 
           addFloatingText(`-1 VIDA! (${newLives} RESTANTES)`, head.x * CELL_SIZE, head.y * CELL_SIZE, '#FF0055');
           return;
@@ -450,8 +464,7 @@ export function useSnakeGame() {
         return;
       }
 
-      // Avançar a cobra (guardando posições anteriores para o lerp visual)
-      prevSnakeRef.current = snake.map((p) => ({ ...p }));
+      // Avançar a cobra
       snake.unshift(newHead);
 
       // Rastro de turbo: faíscas curtas atrás da cabeça enquanto o boost dura
@@ -473,33 +486,29 @@ export function useSnakeGame() {
       if (willGrow && currentItemRef.current) {
         const { item, pos } = currentItemRef.current;
 
+        // HUD atualizado só via refs aqui; o React sincroniza a ~8Hz por fora
+        // do frame de animação (não trava o juice ao comer).
         const earnedPoints = item.points * comboRef.current;
         scoreRef.current += earnedPoints;
-        setScore(scoreRef.current);
         if (scoreRef.current > highScoreRef.current) {
           highScoreRef.current = scoreRef.current;
-          setHighScore(scoreRef.current);
           try {
             localStorage.setItem('vercel_snake_highscore', String(scoreRef.current));
           } catch { /* storage indisponível */ }
         }
 
         itemsEatenRef.current += 1;
-        setItemsEaten(itemsEatenRef.current);
         if (itemsEatenRef.current % 5 === 0) {
           levelRef.current += 1;
-          setLevel(levelRef.current);
           soundManager.playLevelUp();
           flashRef.current = { rgb: '0, 240, 255', alpha: 0.15 };
           addFloatingText(`LEVEL UP! LVL ${levelRef.current}`, CANVAS_WIDTH / 2 - 60, CANVAS_HEIGHT / 2, '#00F0FF');
         }
 
         comboRef.current = Math.min(comboRef.current + 1, 8);
-        setCombo(comboRef.current);
         if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
         comboTimerRef.current = setTimeout(() => {
           comboRef.current = 1;
-          setCombo(1);
         }, 4000);
 
         soundManager.playEat();
@@ -585,14 +594,25 @@ export function useSnakeGame() {
         }
       }
 
-      // Cobra com interpolação entre células (snap em teleporte/encolhimento)
+      // Cobra com interpolação PREDITIVA (para-frente): cada segmento desliza
+      // em direção à PRÓXIMA célula. A cabeça fica na posição lógica (nunca
+      // atrás), então o timing da curva casa com o que o jogador vê — crucial
+      // a 165Hz, onde a dessincronia da interpolação retrospectiva era visível.
       const snake = snakeRef.current;
-      const prev = prevSnakeRef.current;
       snake.forEach((seg, idx) => {
-        const from = prev[idx] ?? seg;
-        const jumped = Math.abs(seg.x - from.x) + Math.abs(seg.y - from.y) > 2;
-        const gx = jumped ? seg.x : from.x + (seg.x - from.x) * t;
-        const gy = jumped ? seg.y : from.y + (seg.y - from.y) * t;
+        let gx = seg.x;
+        let gy = seg.y;
+        // A CABEÇA fica exatamente na célula lógica (idx 0, sem lead): resposta
+        // instantânea e fiel à tecla — a mira da curva casa com o que se vê.
+        // O CORPO desliza em direção ao segmento à frente (suavidade a 165Hz).
+        if (idx > 0) {
+          const fx = snake[idx - 1].x - seg.x;
+          const fy = snake[idx - 1].y - seg.y;
+          if (Math.abs(fx) + Math.abs(fy) === 1) { // passo unitário (não wrap/encolhe)
+            gx = seg.x + fx * t;
+            gy = seg.y + fy * t;
+          }
+        }
         const sx = gx * CELL_SIZE;
         const sy = gy * CELL_SIZE;
         const isHead = idx === 0;
