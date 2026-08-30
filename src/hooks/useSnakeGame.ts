@@ -112,7 +112,13 @@ export function useSnakeGame() {
 
   const snakeRef = useRef<Position[]>(INITIAL_SNAKE.map((p) => ({ ...p })));
   const dirRef = useRef<Position>({ x: 1, y: 0 });
+  // Direção VISUAL: atualiza no instante da tecla (telegrafar), antes do tick.
+  // Dá sensação de resposta imediata sem mover a cobra fora da grade.
+  const visualDirRef = useRef<Position>({ x: 1, y: 0 });
   const nextDirQueueRef = useRef<Position[]>([]);
+  // Modo de feel p/ A/B no 165Hz real: 0=telegrafar+lead (padrão), 1=só telegrafar,
+  // 2=só lead, 3=nenhum (v0.6.0). Alterna com a tecla H (lido direto do ref no draw).
+  const feelModeRef = useRef<number>(0);
   const currentItemRef = useRef<{ item: SnakeItem; pos: Position } | null>(null);
 
   // Efeitos & Juice
@@ -241,6 +247,7 @@ export function useSnakeGame() {
 
     snakeRef.current = INITIAL_SNAKE.map((p) => ({ ...p }));
     dirRef.current = { x: 1, y: 0 };
+    visualDirRef.current = { x: 1, y: 0 };
     nextDirQueueRef.current = [];
 
     scoreRef.current = 0;
@@ -294,6 +301,10 @@ export function useSnakeGame() {
       if (isSameOrOpposite(prev, newDir)) return;
       q[q.length - 1] = newDir;
     }
+    // TELEGRAFAR: input aceito → a cabeça/olhos giram JÁ (antes do tick).
+    // Só para direções válidas (nunca mente girando p/ uma direção que seria rejeitada).
+    visualDirRef.current = newDir;
+    vibrate(6); // eco háptico curtíssimo no mobile
   }, []);
 
   // Loop Principal do Jogo — timestep fixo com acumulador + render interpolado.
@@ -433,6 +444,7 @@ export function useSnakeGame() {
 
           nextDirQueueRef.current = [];
           dirRef.current = { x: -dirRef.current.x, y: -dirRef.current.y };
+          visualDirRef.current = dirRef.current;
           invincibleMsRef.current = POST_HIT_IMMUNITY_MS;
 
           const shrunk = snake.slice(0, Math.max(3, snake.length - 2));
@@ -598,14 +610,27 @@ export function useSnakeGame() {
       // em direção à PRÓXIMA célula. A cabeça fica na posição lógica (nunca
       // atrás), então o timing da curva casa com o que o jogador vê — crucial
       // a 165Hz, onde a dessincronia da interpolação retrospectiva era visível.
+      const mode = feelModeRef.current;
+      const leadOn = mode === 0 || mode === 2;
+      const telegraphOn = mode === 0 || mode === 1;
+      const HEAD_LEAD_MAX = 0.35;
+      const queued = nextDirQueueRef.current.length > 0;
+
       const snake = snakeRef.current;
       snake.forEach((seg, idx) => {
         let gx = seg.x;
         let gy = seg.y;
-        // A CABEÇA fica exatamente na célula lógica (idx 0, sem lead): resposta
-        // instantânea e fiel à tecla — a mira da curva casa com o que se vê.
-        // O CORPO desliza em direção ao segmento à frente (suavidade a 165Hz).
-        if (idx > 0) {
+        if (idx === 0) {
+          // LEAD CLAMPADO: nas retas (fila vazia) a cabeça desliza até ~35% em
+          // direção à próxima célula (suavidade a 165Hz); quando há curva na fila,
+          // trava na célula lógica (mira precisa). Melhor dos dois mundos.
+          if (leadOn && !queued) {
+            const lead = Math.min(t, HEAD_LEAD_MAX);
+            gx = seg.x + dirRef.current.x * lead;
+            gy = seg.y + dirRef.current.y * lead;
+          }
+        } else {
+          // O CORPO desliza em direção ao segmento à frente
           const fx = snake[idx - 1].x - seg.x;
           const fy = snake[idx - 1].y - seg.y;
           if (Math.abs(fx) + Math.abs(fy) === 1) { // passo unitário (não wrap/encolhe)
@@ -640,10 +665,13 @@ export function useSnakeGame() {
         ctx.fill();
 
         if (isHead) {
-          // Olhos acompanham a direção do movimento
-          const d = dirRef.current;
-          const ecx = sx + CELL_SIZE / 2 + d.x * 4;
-          const ecy = sy + CELL_SIZE / 2 + d.y * 4;
+          // Olhos acompanham a direção VISUAL (telegrafada no instante da tecla,
+          // antes do tick) — a cabeça "obedece" na hora, dando resposta imediata.
+          const d = telegraphOn ? visualDirRef.current : dirRef.current;
+          const hcx = sx + CELL_SIZE / 2;
+          const hcy = sy + CELL_SIZE / 2;
+          const ecx = hcx + d.x * 4;
+          const ecy = hcy + d.y * 4;
           const px = -d.y;
           const py = d.x;
           ctx.fillStyle = '#000000';
@@ -651,6 +679,22 @@ export function useSnakeGame() {
           ctx.arc(ecx + px * 4, ecy + py * 4, 2.2, 0, Math.PI * 2);
           ctx.arc(ecx - px * 4, ecy - py * 4, 2.2, 0, Math.PI * 2);
           ctx.fill();
+
+          // Indicador de intenção: quando há curva enfileirada e o telegrafar está
+          // ligado, um nub apontando p/ a direção que vai executar (ensina a bufferizar)
+          if (telegraphOn && queued) {
+            const nd = visualDirRef.current;
+            ctx.fillStyle = invincibleMsRef.current > 0 ? '#FF0080' : '#00F0FF';
+            ctx.beginPath();
+            const tipX = hcx + nd.x * (CELL_SIZE / 2 + 3);
+            const tipY = hcy + nd.y * (CELL_SIZE / 2 + 3);
+            const bpx = -nd.y, bpy = nd.x;
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(hcx + nd.x * (CELL_SIZE / 2 - 3) + bpx * 3, hcy + nd.y * (CELL_SIZE / 2 - 3) + bpy * 3);
+            ctx.lineTo(hcx + nd.x * (CELL_SIZE / 2 - 3) - bpx * 3, hcy + nd.y * (CELL_SIZE / 2 - 3) - bpy * 3);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       });
       ctx.shadowBlur = 0;
@@ -722,6 +766,16 @@ export function useSnakeGame() {
         if (flashRef.current.alpha <= 0) flashRef.current = null;
       }
 
+      // Rótulo de debug do modo de feel (só quando não é o padrão) — tecla H alterna
+      if (mode !== 0 && statusRef.current === 'playing') {
+        const names = ['Telegrafar+Lead', 'Só Telegrafar', 'Só Lead', 'v0.6.0 (nenhum)'];
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillText(`FEEL[H]: ${names[mode]}`, 8, CANVAS_HEIGHT - 6);
+      }
+
       ctx.restore();
     };
 
@@ -771,6 +825,10 @@ export function useSnakeGame() {
       else if (e.code === 'KeyA' || e.code === 'ArrowLeft') changeDirection({ x: -1, y: 0 });
       else if (e.code === 'KeyD' || e.code === 'ArrowRight') changeDirection({ x: 1, y: 0 });
       else if (e.code === 'KeyP' || e.code === 'Space') pauseGame();
+      else if (e.code === 'KeyH') {
+        // A/B do feel no monitor real (só o usuário enxerga 165Hz)
+        feelModeRef.current = (feelModeRef.current + 1) % 4;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
