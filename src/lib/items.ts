@@ -6,6 +6,7 @@ export type ItemEffect =
   | 'shrink'
   | 'extra_life'
   | 'invincible'
+  | 'ghost'
   | 'mega_points';
 
 export interface SnakeItem {
@@ -63,6 +64,11 @@ export const GAME_ITEMS: SnakeItem[] = [
   { emoji: '🛸', name: 'OVNI Galáctico', points: 1300, effect: 'invincible', rarity: 'legendary', duration: 6 },
   { emoji: '🌈', name: 'Prisma Arco-Íris', points: 1400, effect: 'mega_points', rarity: 'legendary' },
   { emoji: '💫', name: 'Estrela Guia', points: 900, effect: 'slow_down', rarity: 'uncommon', duration: 5 },
+
+  // --- Novas mecânicas (sobrevivência — não inflam pontuação) ---
+  { emoji: '👻', name: 'Modo Fantasma', points: 600, effect: 'ghost', rarity: 'rare', duration: 6 },
+  { emoji: '🔱', name: 'Aura Divina', points: 1300, effect: 'invincible', rarity: 'legendary', duration: 8 },
+  { emoji: '😇', name: 'Anjo da Guarda', points: 900, effect: 'ghost', rarity: 'rare', duration: 7 },
 ];
 
 export function getRandomItem(): SnakeItem {

@@ -127,6 +127,7 @@ export function useSnakeGame() {
   const invincibleMsRef = useRef<number>(0);
   const speedBoostMsRef = useRef<number>(0);
   const slowMoMsRef = useRef<number>(0);
+  const ghostMsRef = useRef<number>(0);
   const accRef = useRef<number>(0);
   const lastEffectLabelRef = useRef<string | null>(null);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -264,6 +265,7 @@ export function useSnakeGame() {
     invincibleMsRef.current = 0;
     speedBoostMsRef.current = 0;
     slowMoMsRef.current = 0;
+    ghostMsRef.current = 0;
     particlesRef.current = [];
     floatingTextsRef.current = [];
     ringsRef.current = [];
@@ -383,9 +385,11 @@ export function useSnakeGame() {
       invincibleMsRef.current = Math.max(0, invincibleMsRef.current - interval);
       speedBoostMsRef.current = Math.max(0, speedBoostMsRef.current - interval);
       slowMoMsRef.current = Math.max(0, slowMoMsRef.current - interval);
+      ghostMsRef.current = Math.max(0, ghostMsRef.current - interval);
 
       const label =
         invincibleMsRef.current > 0 ? 'Invencível'
+        : ghostMsRef.current > 0 ? 'Modo Fantasma'
         : shieldMsRef.current > 0 ? 'Escudo Ativo'
         : speedBoostMsRef.current > 0 ? 'Vercel Turbo'
         : slowMoMsRef.current > 0 ? 'Slow Motion'
@@ -463,7 +467,8 @@ export function useSnakeGame() {
       const body = willGrow ? snake : snake.slice(0, -1);
       const selfCollision = body.some((seg) => seg.x === newHead.x && seg.y === newHead.y);
 
-      if (selfCollision && invincibleMsRef.current <= 0) {
+      // Fantasma e Invencibilidade atravessam o próprio corpo
+      if (selfCollision && invincibleMsRef.current <= 0 && ghostMsRef.current <= 0) {
         shakeRef.current = 20;
         soundManager.playHit();
         soundManager.playGameOver();
@@ -476,17 +481,18 @@ export function useSnakeGame() {
       // Avançar a cobra
       snake.unshift(newHead);
 
-      // Rastro de turbo: faíscas curtas atrás da cabeça enquanto o boost dura
-      if (speedBoostMsRef.current > 0) {
+      // Rastro atrás da cabeça: turbo (ciano) e invencibilidade (arco-íris)
+      if (speedBoostMsRef.current > 0 || invincibleMsRef.current > 0) {
+        const rainbow = invincibleMsRef.current > 0;
         for (let i = 0; i < 2; i++) {
           particlesRef.current.push({
             x: head.x * CELL_SIZE + CELL_SIZE / 2 + (Math.random() - 0.5) * 8,
             y: head.y * CELL_SIZE + CELL_SIZE / 2 + (Math.random() - 0.5) * 8,
             vx: -dirRef.current.x * (Math.random() * 2 + 1),
             vy: -dirRef.current.y * (Math.random() * 2 + 1),
-            color: '#00F0FF',
+            color: rainbow ? `hsl(${Math.random() * 360} 100% 65%)` : '#00F0FF',
             size: Math.random() * 2.5 + 1,
-            alpha: 0.8,
+            alpha: 0.85,
             decay: 0.08,
           });
         }
@@ -541,6 +547,7 @@ export function useSnakeGame() {
         else if (item.effect === 'slow_down') slowMoMsRef.current = durationMs;
         else if (item.effect === 'shield') shieldMsRef.current = durationMs;
         else if (item.effect === 'invincible') invincibleMsRef.current = durationMs;
+        else if (item.effect === 'ghost') ghostMsRef.current = durationMs;
         else if (item.effect === 'extra_life') {
           livesRef.current = Math.min(livesRef.current + 1, 5);
           setLives(livesRef.current);
@@ -579,9 +586,18 @@ export function useSnakeGame() {
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       }
 
-      // Borda Externa Neon
-      ctx.strokeStyle = shieldMsRef.current > 0 ? '#00F0FF' : invincibleMsRef.current > 0 ? '#FF0080' : 'rgba(255, 255, 255, 0.2)';
-      ctx.lineWidth = 4;
+      // Borda Externa Neon — cor reflete o efeito ativo (pulsa quando há efeito)
+      const invOn = invincibleMsRef.current > 0;
+      const ghostOn = ghostMsRef.current > 0;
+      const anyEffect = invOn || ghostOn || shieldMsRef.current > 0 || speedBoostMsRef.current > 0 || slowMoMsRef.current > 0;
+      ctx.strokeStyle = invOn
+        ? `hsl(${(time * 0.5) % 360} 100% 60%)` // arco-íris na invencibilidade
+        : ghostOn ? '#B24BF3'
+        : shieldMsRef.current > 0 ? '#00F0FF'
+        : speedBoostMsRef.current > 0 ? '#00F0FF'
+        : slowMoMsRef.current > 0 ? '#FFC53D'
+        : 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = anyEffect ? 4 + Math.sin(time * 0.012) * 2 : 4;
       ctx.strokeRect(2, 2, CANVAS_WIDTH - 4, CANVAS_HEIGHT - 4);
 
       // Item: sprite pré-renderizado (halo+emoji) desenhado com escala — sem fillText por frame
@@ -647,13 +663,23 @@ export function useSnakeGame() {
         }
 
         if (isHead) {
-          ctx.fillStyle = invincibleMsRef.current > 0 ? '#FF0080' : shieldMsRef.current > 0 ? '#00F0FF' : '#FFFFFF';
+          ctx.fillStyle = invOn
+            ? `hsl(${(time * 0.6) % 360} 100% 65%)`   // cabeça arco-íris
+            : ghostOn ? 'rgba(210, 170, 255, 0.75)'   // fantasma translúcido
+            : shieldMsRef.current > 0 ? '#00F0FF'
+            : '#FFFFFF';
           ctx.shadowColor = ctx.fillStyle;
           // Glow fixo e baixo: o pulso ao comer já aparece pelo tamanho (grow), sem custo de blur
           ctx.shadowBlur = 8;
         } else {
           const alpha = Math.max(0.2, 1 - idx / (snake.length * 1.2));
-          ctx.fillStyle = invincibleMsRef.current > 0 ? `rgba(255, 0, 128, ${alpha})` : `rgba(0, 240, 255, ${alpha})`;
+          if (invOn) {
+            ctx.fillStyle = `hsl(${(time * 0.6 + idx * 18) % 360} 100% 60%)`; // corpo arco-íris
+          } else if (ghostOn) {
+            ctx.fillStyle = `rgba(178, 140, 235, ${alpha * 0.55})`;           // fantasma
+          } else {
+            ctx.fillStyle = `rgba(0, 240, 255, ${alpha})`;
+          }
           ctx.shadowBlur = 0;
         }
         ctx.fill();

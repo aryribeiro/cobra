@@ -29,6 +29,10 @@ Web game arcade inspirado no clássico jogo da cobrinha (Nokia), reimaginado com
   - Vibração háptica no mobile (comer, dano, game over).
   - Efeitos sonoros em **arquivos WAV locais** (`public/sounds/`), decodificados uma vez e tocados com baixa latência — sem dependência de serviços de áudio externos.
   - Partículas visuais, rastro de faíscas no turbo e popups de texto flutuantes ("+500", "COMBO x4!", "SHIELD BOUNCE!").
+- **👻 Mecânicas de Sobrevivência (v0.8.0)**:
+  - **Modo Fantasma** (👻/😇): a cobrinha atravessa o próprio corpo por alguns segundos.
+  - **Invencibilidade Arco-Íris** (🌟/🛸/🔱): atravessa paredes e o próprio corpo, com a cobra em cores de arco-íris e rastro cintilante.
+  - Borda da arena pulsa e muda de cor conforme o efeito ativo.
 - **🍎 40+ Emojis & Power-ups**:
   - 25 comidas comuns (🍎, 🍌, 🍕, 🍔, 🍓, 🥑, 🥩...).
   - 17 power-ups especiais: 🚀 Turbo Speed, 🐢 Slow Motion, 🛡️ Escudo de Borda, 🔮 Esfera Encolhedora, 💖 Vida Extra, 🌟 Estrela Invencível, 💎 Diamantes.
